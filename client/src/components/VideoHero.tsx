@@ -51,6 +51,19 @@ export default function VideoHero() {
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
             A project by <span className="font-semibold text-foreground">Emu Unicorn Sauce</span>
           </p>
+
+          <div className="bg-card border border-card-border rounded-lg p-6 max-w-4xl mx-auto text-left">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-2xl">📢</span>
+              <h2 className="text-xl font-semibold text-foreground">About</h2>
+            </div>
+            <p className="text-muted-foreground mb-4">
+              The objective of the workshop is to showcase the use of AI hand tracking through learning sign language.
+            </p>
+            <p className="text-muted-foreground">
+              In this workshop, participants will learn sign language through the use of AI that will help guide them using hand tracking through a computer camera. They will learn how to spell one word before moving on to a fun memory game.
+            </p>
+          </div>
         </div>
 
         {/* Call to Action */}

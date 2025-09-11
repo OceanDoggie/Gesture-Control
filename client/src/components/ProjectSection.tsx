@@ -20,24 +20,47 @@ export default function ProjectSection({ id }: ProjectSectionProps) {
             as part of our workshop project. Our goal is to make sign language learning more accessible 
             through AI-powered hand tracking.
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* TODO: Replace with actual team member data */}
-            {[
-              { name: 'Team Member 1', role: 'AI/ML Developer' },
-              { name: 'Team Member 2', role: 'Frontend Developer' },
-              { name: 'Team Member 3', role: 'UX Designer' },
-              { name: 'Team Member 4', role: 'Computer Vision Specialist' },
-            ].map((member, index) => (
-              <div key={index} className="flex items-center gap-3 p-3 bg-accent/20 rounded-md">
-                <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
-                  <Users className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-medium text-foreground">{member.name}</p>
-                  <p className="text-sm text-muted-foreground">{member.role}</p>
-                </div>
+          <div className="space-y-6">
+            <div>
+              <h4 className="font-medium text-foreground mb-3">Team Members</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[
+                  { name: 'Joey Chen', role: 'Batman', avatar: '🦇' },
+                  { name: 'Ivana Hernandez', role: 'Wonder Woman', avatar: '👸' },
+                  { name: 'Keren Zhang', role: 'Superman', avatar: '🦸' },
+                ].map((member, index) => (
+                  <div key={index} className="flex items-center gap-3 p-4 bg-accent/20 rounded-md hover-elevate">
+                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-xl">
+                      {member.avatar}
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">{member.name}</p>
+                      <p className="text-sm text-muted-foreground">{member.role}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+            
+            <div>
+              <h4 className="font-medium text-foreground mb-3">🎓 Advisors</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  { name: 'Dr. Wei Jin', role: 'Academic Advisor' },
+                  { name: 'Dr. Xin Xu', role: 'Academic Advisor' },
+                ].map((advisor, index) => (
+                  <div key={index} className="flex items-center gap-3 p-4 bg-secondary/20 rounded-md">
+                    <div className="w-10 h-10 bg-secondary/20 rounded-full flex items-center justify-center">
+                      <Users className="h-5 w-5 text-secondary-foreground" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">{advisor.name}</p>
+                      <p className="text-sm text-muted-foreground">{advisor.role}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )

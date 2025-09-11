@@ -1,0 +1,23 @@
+Team: Emu Unicorn Sauce
+
+art featuring batman, wonder woman, and superman
+
+(From left to right: Batman, Wonder Woman, Superman.)
+Joey Chen
+Ivana Hernandez
+Keren Zhang
+🎓 Advisors
+
+Dr. Wei Jin
+Dr. Xin Xu
+📃 Project Description
+
+Participants begin by exploring an AI-powered hand tracking system that provides real-time feedback on their gestures. Unlike traditional sign language learning through videos, where learners often struggle to know whether their hand positions are accurate, this system uses computer vision to mirror participants’ movements and measure their accuracy.
+
+During the workshop, learners will follow guided exercises in which an AI model recognizes their hand shapes and displays a matching 3D avatar performing the correct sign. The system highlights the percentage of accuracy (e.g., 90%, 98%, 100%) to help participants understand their progress before moving to the next gesture.
+
+The project leverages technologies such as MediaPipe for hand tracking, allowing users to see their own skeletal hand overlay compared with the target gesture in real time. By doing so, participants not only practice sign language but also gain an interactive and immersive learning experience.
+
+Compared to traditional methods—such as watching videos or attending in-person classes—this approach is more flexible and accessible. Learners can study anywhere, anytime, while receiving immediate feedback, which significantly increases engagement and retention. This interactive model transforms sign language learning into a process that is visual, participatory, and highly effective.
+
+In addition to practicing sign language, participants will also be introduced to the underlying technology behind the system. The workshop will cover how AI hand tracking works, including concepts of computer vision, gesture recognition, and how different components (such as MediaPipe, 3D models, and accuracy scoring) are integrated into one interactive platform. By walking through these technical elements, participants will not only experience the application but also gain insight into how to build such a system themselves.
