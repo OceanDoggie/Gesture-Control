@@ -1,0 +1,60 @@
+请为我们生成一个静态多页面网站（HTML + CSS + JS），严格按照以下草图与说明实现：
+
+[信息架构 / 文件]
+- index.html（Home, Page1）
+- webcam.html（Webcam, Page2）
+- project.html（Project, Page3：包含多个锚点小节）
+- future.html（Page4：预留空白页）
+- /assets/logo.png（占位，稍后我们会替换）
+- style.css（全站样式，使用 CSS 变量定义色板）
+- main.js（仅放“回到顶部”“移动端菜单”等通用脚本）
+- webcam.js（仅用于 webcam.html 里的 getUserMedia 逻辑）
+
+[全站通用要求]
+- 顶部固定导航栏（sticky）。左上角放项目名“GestureControl”和 logo；右上角是 Dropdown Menu。
+- Dropdown Menu 包含 3 项：Webcam（/webcam.html）、Project（/project.html）、Future（/future.html）。
+- 颜色主题“基于 logo 配色”，请在 :root 定义这些变量（可调）：--purple:#6B2EA6; --teal:#2CA4AB; --orange:#FF7F32; --yellow:#FFC21A; --ink:#222; --bg:#F7F7F9; 导航栏背景用 --purple，按钮与高亮可用 --teal / --orange。
+- 导航可访问（无障碍）：Dropdown 需支持键盘 Tab/Enter/ESC、aria-属性、焦点样式。
+- 响应式：≥1024px 为桌面布局；<1024px 自动切换为汉堡菜单。
+- 页脚放 GitHub/README/Slides 的占位链接（稍后我们替换）。
+
+[Page1: index.html（Home）]
+- 左上角：logo + 文案“GestureControl”。
+- Hero 区居中：嵌入商业宣传视频（优先 <video>，无则提供 YouTube/MP4 占位，文件名 video.mp4）。
+- 在视频下方放一句 tagline（示例：Teaching Sign Language Using AI Hand Tracking Technology）和署名（A project by Emu Unicorn Sauce）。
+- 右上角 Dropdown 同全站；另外在 Hero 区放一个显眼按钮“Try Webcam → /webcam.html”。
+- 页面底部放一个“Readme → GitHub”与“Presentation Slides → 占位链接”的小卡片（与草图中“README GitHub to Presentation / Description / All about the project”呼应）。
+
+[Page2: webcam.html（Webcam 页面，对应草图里的 Webcam 方框）]
+- 顶部同款导航。
+- 主体中间放一个 16:9 的视频容器，调用浏览器 getUserMedia 打开摄像头预览（video 元素 muted、playsinline、autoplay；提供 Start/Stop 按钮与权限失败提示）。
+- 右下角提供一个“Back to top ↑”悬浮按钮（JS 平滑滚动）。
+- 保留一个浅色信息栏，用于将来显示识别提示（暂用占位文本）。
+
+[Page3: project.html（Project 页面）]
+- 顶部同款导航。
+- 顶部标题“Project”+ 一段简短描述。
+- 按草图在同一页内设置四个锚点小节（做成侧边或顶部次级导航锚点即可）：
+  1) About Us（#about-us）
+  2) About Code（#about-code，放 GitHub 仓库占位链接按钮）
+  3) About Tech（#about-tech，技术栈：如 MediaPipe / OpenCV / Web APIs / JS 等，先写占位结构）
+  4) Projectbook / Resources（#projectbook，放“README”“Slides”“Demo”占位链接，描述与图标）
+- 每个小节有卡片式版式与清晰标题；页面右下角同样提供“Back to top ↑”悬浮按钮。
+
+[Page4: future.html（预留空白页）]
+- 顶部同款导航。
+- 居中显示“Reserved for future development.” 的占位区块。
+
+[样式（style.css）]
+- 使用上面的 CSS 变量；导航栏：背景 --purple，文字白色；Dropdown 悬停/聚焦态使用 --teal 下划线或阴影。
+- 主体宽度 1200px（max-width），居中，良好留白；卡片圆角与浅阴影；按钮有 :hover 与 :focus 可视化。
+- Back-to-top 按钮固定在页面右下（仅滚动一定距离后显示）。
+
+[脚本（main.js / webcam.js）]
+- main.js：实现 Dropdown 的键盘可达性、移动端汉堡切换、平滑滚动到锚点、回到顶部按钮显示/隐藏。
+- webcam.js：实现 getUserMedia 打开/关闭摄像头、错误处理（无权限/无设备），并在离开页面时关闭流。
+
+[交付要求]
+- 生成上述全部文件并互相正确链接；导航在所有页面一致可用。
+- 代码整洁、带必要注释；移动端与桌面端均可用。
+- 所有外链与图片、视频先放占位，便于我们后续替换。
