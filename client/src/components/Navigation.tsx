@@ -39,8 +39,8 @@ export default function Navigation() {
   };
 
   const menuItems = [
-    { label: 'Webcam', href: '/webcam' },
     { label: 'Project', href: '/project' },
+    { label: 'Webcam', href: '/webcam' },
     { label: 'Future', href: '/future' },
   ];
 
