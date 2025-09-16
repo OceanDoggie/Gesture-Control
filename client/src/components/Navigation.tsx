@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'wouter';
 import { Menu, X, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import logoUrl from '@assets/generated_images/GestureControl_project_logo_49e785a6.png';
+import logoUrl from '@assets/generated_images/p1.png';
 
 export default function Navigation() {
   const [location] = useLocation();
