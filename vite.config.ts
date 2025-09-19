@@ -4,7 +4,7 @@ import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 export default defineConfig({
-  base: "/Gesture-Control-Summary/",
+  base: "/Gesture-Control/",
   plugins: [
     react(),
     runtimeErrorOverlay(),
