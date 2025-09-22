@@ -26,7 +26,7 @@ function Router() {
 
 function App() {
   return (
-    <WouterRouter base="/Gesture-Control-Summary">
+    <WouterRouter base="/">
       <QueryClientProvider client={queryClient}>
         <ThemeProvider defaultTheme="light" storageKey="gesturecontrol-theme">
           <TooltipProvider>
