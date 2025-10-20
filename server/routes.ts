@@ -1,7 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { GestureWebSocketService } from "./websocket_service"; // 使用真正的AI识别服务
 import { 
   processGesture, 
   getGestureInstructions, 
@@ -12,9 +11,6 @@ import {
 export async function registerRoutes(app: Express): Promise<Server> {
   // 创建HTTP服务器
   const httpServer = createServer(app);
-
-  // 初始化WebSocket服务（集成Python AI模型）
-  const gestureWebSocketService = new GestureWebSocketService(httpServer);
 
   // API路由 - 手势识别相关
   app.post('/api/gesture/process', processGesture);
@@ -34,23 +30,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Render.com 健康检查端点
+  app.get('/healthz', (req, res) => {
+    res.send('ok');
+  });
+
   // 获取WebSocket连接统计
   app.get('/api/gesture/stats', (req, res) => {
-    const stats = gestureWebSocketService.getConnectionStats();
     res.json({
       success: true,
-      data: stats
+      data: {
+        connections: 0,
+        active: 0
+      }
     });
   });
 
-  // 清理函数
-  const cleanup = () => {
-    gestureWebSocketService.close();
-  };
-
   // 处理进程退出
-  process.on('SIGINT', cleanup);
-  process.on('SIGTERM', cleanup);
+  process.on('SIGINT', () => {});
+  process.on('SIGTERM', () => {});
 
   return httpServer;
 }

@@ -1,17 +1,24 @@
 /**
- * WebSocket服务 - 用于实时手势识别通信
+ * WebSocket 服务：前端 <-> Node <-> Python 的实时桥接（仅初始化一次）
+ * 中文注释说明：
+ * - 只“附着”到外部的 HTTP server（由 index.ts 创建并 listen）
+ * - 不再创建第二个独立端口，避免重复 handleUpgrade / EADDRINUSE
+ * - 保留心跳、日志、PythonShell 通信，并避免 TS 的 downlevelIteration 报错
  */
-import { WebSocketServer, WebSocket } from 'ws';
-import { IncomingMessage } from 'http';
-import { PythonShell } from 'python-shell';
-import { log } from './vite';
-import path from 'path';
-import { fileURLToPath } from 'url';
+
+import type http from "http";
+import path from "path";
+import { WebSocketServer, WebSocket } from "ws";
+import { IncomingMessage } from "http";
+import { PythonShell } from "python-shell";
+
+const WS_PATH = "/ws/gesture";        // 前端用的 WS 路径
+const HEARTBEAT_MS = 30_000;          // 心跳间隔
 
 interface GestureMessage {
-  type: 'gesture_data' | 'frame_data' | 'start_recognition' | 'stop_recognition';
+  type: "gesture_data" | "frame_data" | "start_recognition" | "stop_recognition";
   data?: any;
-  frame?: string; // base64 encoded frame
+  frame?: string;
   target_gesture?: string;
 }
 
@@ -19,230 +26,308 @@ interface ClientConnection {
   ws: WebSocket;
   isRecognizing: boolean;
   targetGesture?: string;
+  lastPongTs: number;
+  latestFrame?: string;  // 仅保存最新帧，旧帧会被覆盖
 }
 
-class GestureWebSocketService {
+export class GestureWebSocketService {
+  // 仅一个 WSS 实例
   private wss: WebSocketServer;
+  private httpServer: http.Server;
   private clients: Map<string, ClientConnection> = new Map();
   private pythonProcess: PythonShell | null = null;
+  private heartBeatTimer: NodeJS.Timeout | null = null;
 
-  constructor(server: any) {
-    this.wss = new WebSocketServer({ 
-      server,
-      path: '/ws/gesture'
+  /**
+   * 只附着到外部 server（由 index.ts 传入）
+   */
+  constructor(externalServer: http.Server) {
+    this.httpServer = externalServer;
+
+    console.log("🔗 Attaching Gesture WebSocket to existing HTTP server...");
+    
+    // 打印当前 upgrade 监听数量，便于调试
+    const beforeCount = this.httpServer.listenerCount("upgrade");
+    console.log(`🔍 WS upgrade listeners count (before): ${beforeCount}`);
+
+    // 只初始化一次 WebSocketServer —— 使用"附着到同一个 HTTP server"的方式
+    this.wss = new WebSocketServer({
+      server: this.httpServer,
+      path: WS_PATH,  // /ws/gesture
     });
+
+    // 确认 WebSocket 成功挂载
+    const afterCount = this.httpServer.listenerCount("upgrade");
+    console.log(`🔍 WS upgrade listeners count (after): ${afterCount}`);
+    
+    // ✅ 说明：开发环境下通常有 2 个监听器（Vite HMR + Gesture WS）
+    if (afterCount === 2) {
+      console.log(`✅ 正常：Vite HMR (/__vite_hmr) + Gesture WS (/ws/gesture) 共存`);
+    } else if (afterCount > 2) {
+      console.warn(`⚠️  警告：检测到 ${afterCount} 个 upgrade 监听器，可能存在重复初始化！`);
+    }
 
     this.setupWebSocketHandlers();
     this.setupPythonProcess();
+    this.startHeartbeat();
   }
 
-  private setupWebSocketHandlers() {
-    this.wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
-      const clientId = this.generateClientId();
-      log(`🔗 新的手势识别客户端连接: ${clientId}`);
+  // ====================== WS 处理 ======================
 
-      // 存储客户端连接
+  private setupWebSocketHandlers() {
+    this.wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
+      const clientId = this.generateClientId();
+      
+      // 打印连接详细信息，用于调试
+      console.log(`\n✅ WebSocket client connected: ${clientId}`);
+      console.log(`   📍 URL: ${req.url}`);
+      console.log(`   🌐 Origin: ${req.headers.origin || 'N/A'}`);
+      console.log(`   🔑 Host: ${req.headers.host || 'N/A'}`);
+      console.log(`   📊 Total clients: ${this.clients.size + 1}\n`);
+
       this.clients.set(clientId, {
         ws,
-        isRecognizing: false
+        isRecognizing: false,
+        lastPongTs: Date.now(),
       });
 
-      // 发送连接确认
-      this.sendToClient(clientId, {
-        type: 'connection_established',
+      this.safeSend(ws, {
+        type: "connection_established",
         clientId,
-        message: '手势识别服务已连接'
+        message: "WebSocket connected",
       });
 
-      // 处理客户端消息
-      ws.on('message', (data: Buffer) => {
+      ws.on("message", (data: Buffer) => {
         try {
-          const message: GestureMessage = JSON.parse(data.toString());
-          this.handleClientMessage(clientId, message);
-        } catch (error) {
-          log(`❌ 解析客户端消息失败: ${error}`);
-          this.sendToClient(clientId, {
-            type: 'error',
-            message: '消息格式错误'
-          });
+          const msg: GestureMessage = JSON.parse(data.toString());
+          this.handleClientMessage(clientId, msg);
+        } catch (err) {
+          console.error(`❌ WS message parse error:`, err);
+          this.safeSend(ws, { type: "error", message: "Invalid JSON message" });
         }
       });
 
-      // 处理客户端断开连接
-      ws.on('close', () => {
-        log(`🔌 客户端断开连接: ${clientId}`);
+      ws.on("pong", () => {
+        const c = this.clients.get(clientId);
+        if (c) c.lastPongTs = Date.now();
+      });
+
+      ws.on("close", (_code: number) => {
+        console.log(`🔌 WS client closed: ${clientId}`);
         this.clients.delete(clientId);
       });
 
-      // 处理错误
-      ws.on('error', (error) => {
-        log(`❌ WebSocket错误: ${error}`);
+      ws.on("error", (e) => {
+        console.error(`❌ WS error (${clientId}):`, e);
         this.clients.delete(clientId);
       });
     });
+
+    this.wss.on("error", (e: any) => {
+      console.error("\n❌ WebSocketServer error:", e);
+      if (e.code === 'EADDRINUSE') {
+        console.error("⚠️  端口冲突：WebSocket 尝试监听已占用的端口！");
+        console.error("💡 提示：请检查是否有多个 WebSocketServer 实例被创建");
+      }
+    });
   }
+
+  // ====================== Python 子进程 ======================
 
   private setupPythonProcess() {
-    // 启动Python手势识别进程 - 使用带评分系统的版本
     try {
-      // 使用绝对路径确保无论从哪里启动都能找到Python脚本
-      const scriptPath = path.join(process.cwd(), 'server', 'ml', 'realtime_recognition_with_scoring.py');
-      
-      log(`🐍 正在启动Python脚本: ${scriptPath}`);
-      
+      const scriptPath = path.join(
+        process.cwd(),
+        "server",
+        "ml",
+        "realtime_recognition.py"
+      );
+      console.log(`🐍 Starting Python: ${scriptPath}`);
+
       this.pythonProcess = new PythonShell(scriptPath, {
-        mode: 'text', // 使用文本模式，因为Python脚本输出JSON字符串
-        pythonPath: 'python', // 确保Python环境正确
-        args: []
+        mode: "text",
+        pythonPath: "python", // Windows 环境通常就是 python
+        args: [],
       });
 
-      // 处理Python进程输出
-      this.pythonProcess.on('message', (message: any) => {
+      // Python 按行输出
+      this.pythonProcess.on("message", (line: string) => {
         try {
-          // Python输出的是JSON字符串，需要解析
-          const result = typeof message === 'string' ? JSON.parse(message) : message;
-          
-          // 只在非状态消息时记录详细日志
-          if (result.type !== 'ready' && result.type !== 'status') {
-            log(`🐍 Python识别结果: ${JSON.stringify(result)}`);
+          const obj = JSON.parse(line);
+          if (obj.type === "status" || obj.type === "ready") {
+            console.log(`🐍 ${obj.message || "Python ready"}`);
           } else {
-            log(`🐍 ${result.message || 'Python服务就绪'}`);
+            console.log(`🐍 Python result:`, obj);
           }
-          
-          this.broadcastGestureResult(result);
-        } catch (error) {
-          log(`❌ 解析Python输出失败: ${error} - 原始消息: ${message}`);
+          this.broadcastGestureResult(obj);
+        } catch {
+          // 过滤冗余日志
+          if (
+            !line.includes("WARNING") &&
+            !line.startsWith("INFO:") &&
+            !line.includes("W0000")
+          ) {
+            console.warn(`🐍 [raw] ${line}`);
+          }
         }
       });
 
-      // 处理Python进程错误
-      this.pythonProcess.on('stderr', (stderr: string) => {
-        // 过滤MediaPipe的warning信息，只显示真正的错误
-        if (!stderr.includes('WARNING') && !stderr.includes('W0000')) {
-          log(`🐍 Python错误: ${stderr}`);
+      this.pythonProcess.on("stderr", (stderr: string) => {
+        if (!stderr.includes("WARNING") && !stderr.includes("W0000")) {
+          console.error(`🐍 stderr: ${stderr}`);
         }
       });
 
-      // 处理Python进程关闭
-      this.pythonProcess.on('close', (code: number) => {
-        log(`🐍 Python进程已关闭，退出码: ${code}`);
+      this.pythonProcess.on("close", (code: number) => {
+        console.log(`🐍 Python exited with code: ${code}`);
         this.pythonProcess = null;
       });
 
-      // 处理Python进程错误
-      this.pythonProcess.on('error', (error: Error) => {
-        log(`❌ Python进程错误: ${error.message}`);
+      this.pythonProcess.on("error", (err: Error) => {
+        console.error(`❌ Python error: ${err.message}`);
         this.pythonProcess = null;
       });
 
-      log('✅ Python手势识别服务（带评分系统）已启动');
+      console.log("✅ Python gesture service started");
     } catch (error) {
-      log(`❌ 启动Python服务失败: ${error}`);
-      log(`   请确保Python已安装且所有依赖包已安装`);
-      log(`   运行命令: pip install mediapipe opencv-python numpy joblib scikit-learn pandas`);
+      console.error(`❌ Failed to start Python:`, error);
+      console.error(
+        `👉 Make sure dependencies are installed: pip install mediapipe opencv-python numpy joblib scikit-learn`
+      );
     }
   }
+
+  // ====================== 业务逻辑 ======================
 
   private handleClientMessage(clientId: string, message: GestureMessage) {
     const client = this.clients.get(clientId);
     if (!client) return;
 
     switch (message.type) {
-      case 'start_recognition':
+      case "start_recognition": {
         client.isRecognizing = true;
         client.targetGesture = message.target_gesture;
         this.sendToClient(clientId, {
-          type: 'recognition_started',
+          type: "recognition_started",
           target_gesture: message.target_gesture,
-          message: '开始手势识别'
+          message: "Start recognition",
         });
         break;
-
-      case 'stop_recognition':
+      }
+      case "stop_recognition": {
         client.isRecognizing = false;
         client.targetGesture = undefined;
         this.sendToClient(clientId, {
-          type: 'recognition_stopped',
-          message: '停止手势识别'
+          type: "recognition_stopped",
+          message: "Stop recognition",
         });
         break;
-
-      case 'frame_data':
+      }
+      case "frame_data": {
         if (client.isRecognizing && message.frame) {
-          this.processFrame(clientId, message.frame);
+          this.processFrame(clientId, message.frame, client.targetGesture);
         }
         break;
-
+      }
       default:
-        log(`❓ 未知消息类型: ${message.type}`);
+        this.sendToClient(clientId, { type: "error", message: "Unknown message type" });
     }
   }
 
-  private async processFrame(clientId: string, frameData: string) {
+  private processFrame(clientId: string, frameData: string, target?: string) {
+    const client = this.clients.get(clientId);
+    if (!client || !this.pythonProcess) return;
+
+    // ⚠️ 性能优化：仅保存最新帧，不排队处理旧帧（避免延迟累积）
+    client.latestFrame = frameData;
+    client.targetGesture = target;
+
+    // 立即处理最新帧（如果 Python 空闲）
+    this.processLatestFrame(clientId);
+  }
+
+  private processLatestFrame(clientId: string) {
+    const client = this.clients.get(clientId);
+    if (!client || !client.latestFrame || !this.pythonProcess) return;
+
+    const payload = {
+      type: "process_frame",
+      client_id: clientId,
+      frame: client.latestFrame,
+      target_gesture: client.targetGesture || ""
+    };
+
     try {
-      // 发送帧数据到Python进程进行处理
-      if (this.pythonProcess) {
-        const message = {
-          type: 'process_frame',
-          client_id: clientId,
-          frame: frameData  // Python脚本期望的字段名是'frame'而不是'frame_data'
-        };
-        
-        // 发送JSON消息到Python的stdin
-        this.pythonProcess.send(JSON.stringify(message) + '\n');
-      }
-    } catch (error) {
-      log(`❌ 处理帧数据失败: ${error}`);
-      this.sendToClient(clientId, {
-        type: 'error',
-        message: '处理视频帧失败'
-      });
+      this.pythonProcess.send(JSON.stringify(payload));
+      // 清空最新帧，避免重复处理
+      client.latestFrame = undefined;
+    } catch (e) {
+      console.error("❌ send to Python failed:", e);
+      this.sendToClient(clientId, { type: "error", message: "Send to Python failed" });
     }
   }
 
   private broadcastGestureResult(result: any) {
-    // 广播手势识别结果给所有活跃的客户端
+    // 用 forEach，避免 TS 的 downlevelIteration 报错
     this.clients.forEach((client, clientId) => {
-      if (client.isRecognizing) {
-        this.sendToClient(clientId, {
-          type: 'gesture_result',
-          ...result
-        });
+      if (client.isRecognizing && client.ws.readyState === WebSocket.OPEN) {
+        this.safeSend(client.ws, { type: "gesture_result", ...result });
       }
     });
   }
 
   private sendToClient(clientId: string, message: any) {
-    const client = this.clients.get(clientId);
-    if (client && client.ws.readyState === WebSocket.OPEN) {
-      try {
-        client.ws.send(JSON.stringify(message));
-      } catch (error) {
-        log(`❌ 发送消息失败: ${error}`);
-        this.clients.delete(clientId);
-      }
+    const c = this.clients.get(clientId);
+    if (!c || c.ws.readyState !== WebSocket.OPEN) return;
+    this.safeSend(c.ws, message);
+  }
+
+  private safeSend(ws: WebSocket, data: any) {
+    try {
+      ws.send(JSON.stringify(data));
+    } catch (e) {
+      console.error("❌ WS send failed:", e);
     }
   }
 
   private generateClientId(): string {
-    return `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `client_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   }
 
-  // 获取连接统计
-  getConnectionStats() {
-    return {
-      total_clients: this.clients.size,
-      active_recognition: Array.from(this.clients.values()).filter(c => c.isRecognizing).length
-    };
+  // ====================== 心跳保活 ======================
+
+  private startHeartbeat() {
+    if (this.heartBeatTimer) clearInterval(this.heartBeatTimer);
+    this.heartBeatTimer = setInterval(() => {
+      const now = Date.now();
+      // 用 forEach 避免 Map 的 for...of 触发 ts(2802)
+      this.clients.forEach((c, id) => {
+        // 两个心跳周期没响应就断开
+        if (now - c.lastPongTs > HEARTBEAT_MS * 2) {
+          try { c.ws.terminate(); } catch {}
+          this.clients.delete(id);
+          console.warn(`⚠️  Terminated stale client: ${id}`);
+          return;
+        }
+        try { c.ws.ping(); } catch {}
+      });
+    }, HEARTBEAT_MS);
   }
 
-  // 关闭服务
-  close() {
-    if (this.pythonProcess) {
-      this.pythonProcess.kill();
-    }
-    this.wss.close();
+  // ====================== 关闭清理 ======================
+
+  public getConnectionStats() {
+    let active = 0;
+    this.clients.forEach(c => { if (c.isRecognizing) active++; });
+    return { total_clients: this.clients.size, active_recognition: active };
+  }
+
+  public close() {
+    if (this.heartBeatTimer) clearInterval(this.heartBeatTimer);
+    this.clients.forEach((c) => { try { c.ws.close(); } catch {} });
+    this.clients.clear();
+    if (this.pythonProcess) { try { this.pythonProcess.kill(); } catch {} this.pythonProcess = null; }
+    try { this.wss.close(); } catch {}
+    console.log("🛑 WS service closed.");
   }
 }
-
-export { GestureWebSocketService };

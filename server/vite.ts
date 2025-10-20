@@ -22,7 +22,11 @@ export function log(message: string, source = "express") {
 export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
     middlewareMode: true,
-    hmr: { server },
+    // ✅ 明确指定 Vite HMR WebSocket 路径，避免与业务 WebSocket 冲突
+    hmr: { 
+      server,
+      path: '/__vite_hmr'  // Vite 默认路径，显式声明避免混淆
+    },
     allowedHosts: true as const,
   };
 

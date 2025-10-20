@@ -1,0 +1,54 @@
+# Render Blueprint 配置文件
+# 用于自动部署 GestureWorkshop 到 Render.com
+
+services:
+  # 后端 API 服务
+  - type: web
+    name: gesture-api
+    runtime: node
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        sync: false
+        value: 10000
+      - key: PYTHON_BIN
+        value: python3
+      - key: MODEL_DIR
+        value: /opt/render/project/src/server/ml
+      - key: CORS_ORIGIN
+        sync: false
+        # 需要在部署后手动填写前端 URL
+
+  # 前端静态网站服务
+  - type: web
+    name: gesture-client
+    runtime: static
+    env: static
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+    envVars:
+      - key: VITE_API_BASE
+        sync: false
+        # 需要在部署后手动填写后端 URL (如 https://gesture-api.onrender.com)
+
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+

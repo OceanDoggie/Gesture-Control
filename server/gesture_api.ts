@@ -15,22 +15,43 @@ class GestureAPI {
 
   private initializePythonService() {
     try {
-      this.pythonProcess = new PythonShell('server/ml/realtime_recognition.py', {
+      // 使用环境变量配置 Python 路径和模型目录
+      const pythonBin = process.env.PYTHON_BIN || 'python3';
+      const modelDir = process.env.MODEL_DIR || 'server/ml';
+      const scriptPath = `${modelDir}/realtime_recognition.py`;
+
+      console.log(`🐍 使用 Python: ${pythonBin}`);
+      console.log(`📁 模型目录: ${modelDir}`);
+      console.log(`📜 脚本路径: ${scriptPath}`);
+
+      this.pythonProcess = new PythonShell(scriptPath, {
         mode: 'json',
-        pythonPath: 'python',
+        pythonPath: pythonBin,
         args: []
       });
 
       this.pythonProcess.on('message', (message: any) => {
+        console.log(`🐍 Python服务响应: ${JSON.stringify(message)}`);
         log(`🐍 Python服务响应: ${JSON.stringify(message)}`);
       });
 
       this.pythonProcess.on('stderr', (stderr: string) => {
+        console.error(`🐍 Python stderr: ${stderr}`);
         log(`🐍 Python错误: ${stderr}`);
       });
 
+      this.pythonProcess.on('error', (error: Error) => {
+        console.error(`🐍 Python进程错误: ${error.message}`);
+      });
+
+      this.pythonProcess.on('close', (code: number) => {
+        console.log(`🐍 Python进程退出，代码: ${code}`);
+      });
+
+      console.log('✅ Python手势识别服务已初始化');
       log('✅ Python手势识别服务已初始化');
     } catch (error) {
+      console.error(`❌ 初始化Python服务失败: ${error}`);
       log(`❌ 初始化Python服务失败: ${error}`);
     }
   }
@@ -84,40 +105,40 @@ class GestureAPI {
     }
   }
 
-  // 获取手势指导
+  // 获取手势指导 (Get gesture instructions - English only)
   getGestureInstructions(req: Request, res: Response) {
     const { gesture } = req.params;
     
     const instructions = {
       'A': {
         gesture: 'A',
-        instruction: '握拳，拇指放在其他手指上',
-        practice_tip: '尝试做出 A 手势，保持手部稳定',
-        difficulty: '简单'
+        instruction: 'Make a fist with your thumb on top of other fingers',
+        practice_tip: 'Try making the A gesture and keep your hand steady',
+        difficulty: 'Easy'
       },
       'B': {
         gesture: 'B',
-        instruction: '张开手掌，手指并拢',
-        practice_tip: '保持手指伸直，手掌平展',
-        difficulty: '简单'
+        instruction: 'Open your palm with fingers together',
+        practice_tip: 'Keep your fingers straight and palm flat',
+        difficulty: 'Easy'
       },
       'C': {
         gesture: 'C',
-        instruction: '弯曲手指，像抓东西一样',
-        practice_tip: '手指弯曲成弧形，像握球一样',
-        difficulty: '中等'
+        instruction: 'Curve your fingers like you\'re grabbing something',
+        practice_tip: 'Curve your fingers in an arc, like holding a ball',
+        difficulty: 'Medium'
       },
       'D': {
         gesture: 'D',
-        instruction: '伸出食指，其他手指握拳',
-        practice_tip: '食指伸直，其他手指紧握',
-        difficulty: '简单'
+        instruction: 'Extend your index finger, other fingers in a fist',
+        practice_tip: 'Keep index finger straight, other fingers tight',
+        difficulty: 'Easy'
       },
       'E': {
         gesture: 'E',
-        instruction: '竖起拇指，其他手指握拳',
-        practice_tip: '拇指向上，其他手指紧握',
-        difficulty: '简单'
+        instruction: 'Thumbs up, other fingers in a fist',
+        practice_tip: 'Thumb pointing up, other fingers tight',
+        difficulty: 'Easy'
       }
     };
 

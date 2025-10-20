@@ -133,11 +133,22 @@ export default function WebcamViewer() {
 
   // 🔌 自动连接 WebSocket（组件挂载时立即连接，卸载时关闭）
   useEffect(() => {
-    // 开发环境：强制去 4000；生产环境：用当前域名
-    const isDev = import.meta.env.DEV;
-    const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsHost = isDev ? 'localhost:4000' : location.host;
-    const wsUrl = `${wsProtocol}://${wsHost}/ws/gesture`;
+    // 使用环境变量 VITE_API_BASE，如果没有则使用默认逻辑
+    const apiBase = import.meta.env.VITE_API_BASE;
+    
+    let wsUrl: string;
+    if (apiBase) {
+      // 如果配置了 VITE_API_BASE（如 https://gesture-api.onrender.com）
+      const url = new URL(apiBase);
+      const wsProtocol = url.protocol === 'https:' ? 'wss' : 'ws';
+      wsUrl = `${wsProtocol}://${url.host}/ws/gesture`;
+    } else {
+      // 回退到默认逻辑：开发环境去 localhost:4000，生产环境用当前域名
+      const isDev = import.meta.env.DEV;
+      const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsHost = isDev ? 'localhost:4000' : location.host;
+      wsUrl = `${wsProtocol}://${wsHost}/ws/gesture`;
+    }
 
     console.log('[WS] Connecting to:', wsUrl);
 
@@ -316,7 +327,8 @@ export default function WebcamViewer() {
 
     // Load gesture instructions (optional)
     try {
-      const response = await fetch(`/api/gesture/instructions/${gesture}`);
+      const apiBase = import.meta.env.VITE_API_BASE || '';
+      const response = await fetch(`${apiBase}/api/gesture/instructions/${gesture}`);
       const data = await response.json();
       if (data.success) setGestureInstructions(data.data);
     } catch (err) {
