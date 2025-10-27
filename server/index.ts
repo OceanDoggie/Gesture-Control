@@ -1,6 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { setupFrontend, log } from "./vite.js";
 // ✅ 新增：引入 WebSocket 服务
 import { GestureWebSocketService } from "./websocket_service";
 
@@ -46,14 +46,10 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // （中文说明）开发环境用 Vite 代理，生产环境走静态资源
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
-  }
+  // ✅ 统一的前端服务设置：生产环境走静态文件（dist），开发环境用 Vite 热更新
+  await setupFrontend(app, server);
 
-  // ✅ 关键：把 WebSocket 服务"挂载"到同一个 server 上（与 Express 复用 4000 端口）
+  // ✅ 关键：把 WebSocket 服务"挂载"到同一个 server 上（与 Express 复用端口）
   //    这行之前一直缺失，导致前端连不上 ws://localhost:4000/ws/gesture
   new GestureWebSocketService(server);
 
