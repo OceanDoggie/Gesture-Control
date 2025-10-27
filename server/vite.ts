@@ -31,7 +31,7 @@ export async function setupVite(app: Express, server: Server) {
   };
 
   // 内联 Vite 配置，避免导入 vite.config.ts 时的 __dirname 问题
-  const projectRoot = path.resolve(import.meta.dirname, "..");
+  const projectRoot = path.resolve(__dirname, "..");
   const clientRoot = path.resolve(projectRoot, "client");
 
   const vite = await createViteServer({
@@ -67,7 +67,7 @@ export async function setupVite(app: Express, server: Server) {
 
     try {
       const clientTemplate = path.resolve(
-        import.meta.dirname,
+        __dirname,
         "..",
         "client",
         "index.html",
@@ -89,7 +89,7 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(import.meta.dirname, "public");
+  const distPath = path.resolve(__dirname, "public");
 
   if (!fs.existsSync(distPath)) {
     throw new Error(

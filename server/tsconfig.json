@@ -1,21 +1,18 @@
 {
-    "compilerOptions": {
-      "target": "ES2020",
-      "module": "es2020",
-      "moduleResolution": "node",
-      "outDir": "../dist",          /* 编译输出到仓库根的 dist 文件夹 */
-      "rootDir": "..",              /* 注意：把 rootDir 指向仓库根（包含 shared） */
-      "baseUrl": "../",
-      "paths": {
-        "shared/*": ["shared/*"]
-      },
-      "esModuleInterop": true,
-      "allowSyntheticDefaultImports": true,
-      "resolveJsonModule": true,
-      "skipLibCheck": true,
-      "strict": false,
-      "forceConsistentCasingInFileNames": true
-    },
-    "include": ["**/*.ts", "**/*.mts", "**/*.cts", "../shared/**/*.ts"]
-  }
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "./dist",
+    "rootDir": "..",
+    "baseUrl": "../",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["./**/*.ts", "../shared/**/*.ts"]
+}
   
