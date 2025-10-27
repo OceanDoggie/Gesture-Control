@@ -15,7 +15,8 @@
     "download-models": "node scripts/download-models.js",
 
      "build:server:render": "tsc -p server/tsconfig.json",
-    "backend:render": "node server/dist/index.js"
+"backend:render": "node dist/server/index.js"
+
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
