@@ -1,13 +1,22 @@
 {
     "compilerOptions": {
-      "outDir": "./dist",
-      "rootDir": "./",
-      "module": "commonjs",
-      "target": "ES2020",
+      "target": "ES2020",                /* 编译目标 ECMAScript 版本 */
+      "module": "es2020",                /* 必须使用 es2020/esnext 以允许 import.meta */
+      "moduleResolution": "node",        /* 用 node 风格解析模块 */
+      "outDir": "./dist",                /* 编译后的文件输出到 server/dist */
+      "rootDir": "./",                   /* 源码根目录（相对于 server/） */
+      "baseUrl": "./",                   /* 用于 paths 映射的基准路径（相对于 server/） */
+      "paths": {
+        "shared/*": ["../shared/*"]      /* <-- 关键：把 'shared/*' 映射到仓库根的 shared 文件夹 */
+      },
       "esModuleInterop": true,
+      "allowSyntheticDefaultImports": true,
+      "resolveJsonModule": true,
+      "skipLibCheck": true,
       "strict": false,
-      "skipLibCheck": true
+      "forceConsistentCasingInFileNames": true,
+      "skipDefaultLibCheck": true
     },
-    "include": ["**/*.ts"]
+    "include": ["**/*.ts", "**/*.mts", "**/*.cts", "../shared/**/*.ts"]
   }
   
