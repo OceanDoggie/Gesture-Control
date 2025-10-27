@@ -12,7 +12,10 @@
     "build:render": "npm run build:server",
     "start": "node scripts/download-models.js && cross-env NODE_ENV=production tsx server/index.ts",
     "start:render": "node build/index.js",
-    "download-models": "node scripts/download-models.js"
+    "download-models": "node scripts/download-models.js",
+
+     "build:server:render": "tsc -p server/tsconfig.json",
+    "backend:render": "node server/dist/index.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
