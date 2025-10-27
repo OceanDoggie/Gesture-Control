@@ -135,6 +135,14 @@ export class GestureWebSocketService {
   // ====================== Python 子进程 ======================
 
   private setupPythonProcess() {
+    // 🟡 生产环境跳过 Python spawn（避免 opencv-python 等依赖导致崩溃）
+    if (process.env.NODE_ENV === "production") {
+      console.log("🟡 Skipping Python gesture service in production (Render deploy mode)");
+      this.pythonProcess = null;
+      return; // ✅ 直接返回，不启动 Python，服务器继续运行
+    }
+
+    // 🔵 开发环境：正常启动 Python 手势识别服务
     try {
       const scriptPath = path.join(
         process.cwd(),

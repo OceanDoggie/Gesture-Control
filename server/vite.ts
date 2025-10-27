@@ -29,25 +29,30 @@ export async function setupFrontend(app: Express, server?: Server) {
   if (process.env.NODE_ENV === "production") {
     // 使用 process.cwd() 定位项目根目录，解决 __dirname 在 ESM 下不存在的问题
     const distPath = path.resolve(process.cwd(), "dist");
+    const indexHtmlPath = path.join(distPath, "index.html");
 
-    // 检查 dist 目录是否存在
-    if (!fs.existsSync(distPath)) {
-      console.error(`❌ 找不到打包目录: ${distPath}`);
-      console.error(`   请先运行: npm run build`);
-      throw new Error(
-        `Could not find the build directory: ${distPath}, make sure to build the client first`
-      );
+    // 检查 index.html 是否存在
+    if (fs.existsSync(indexHtmlPath)) {
+      // ✅ 前端资源存在：正常提供静态文件服务
+      app.use(express.static(distPath));
+
+      // 所有未匹配的路由都返回 index.html（用于 SPA 路由）
+      app.get("*", (_req, res) => {
+        res.sendFile(indexHtmlPath);
+      });
+
+      console.log("[express] static frontend mounted:", distPath);
+    } else {
+      // ⚠️ 前端资源不存在：返回友好的提示信息，不崩溃
+      console.warn("[express] dist/ not found. Serving fallback health message instead.");
+      
+      app.get("*", (_req, res) => {
+        res
+          .status(200)
+          .type("text/plain")
+          .send("Backend is running, but frontend bundle (dist/) was not found in this environment.");
+      });
     }
-
-    // 挂载静态文件目录
-    app.use(express.static(distPath));
-
-    // 所有未匹配的路由都返回 index.html（用于 SPA 路由）
-    app.get("*", (_req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-
-    console.log("[express] static frontend mounted:", distPath);
   } 
   // 开发环境：使用 Vite dev 中间件
   else {
