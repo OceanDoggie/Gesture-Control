@@ -9,12 +9,11 @@
     "dev:server": "cross-env NODE_ENV=development tsx server/index.ts",
     "build": "node scripts/download-models.js && vite build",
     "build:server": "esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=server/dist",
-    "build:render": "npm run build:server",
-    "start": "node scripts/download-models.js && cross-env NODE_ENV=production tsx server/index.ts",
-    "start:render": "node build/index.js",
-    "download-models": "node scripts/download-models.js",
     "build:server:render": "tsc -p server/tsconfig.json",
-    "backend:render": "node dist/server/index.js"
+    "build:render": "npm run build:server:render",
+    "start": "node dist/server/index.js",
+    "backend:render": "node dist/server/index.js",
+    "download-models": "node scripts/download-models.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

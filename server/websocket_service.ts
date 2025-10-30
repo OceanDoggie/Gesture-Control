@@ -75,6 +75,12 @@ export class GestureWebSocketService {
   // ====================== WS 处理 ======================
 
   private setupWebSocketHandlers() {
+    // ✅ 全局错误处理，防止未捕获错误导致进程崩溃
+    this.wss.on("error", (err: Error) => {
+      console.error("❌ [WS Server Error]", err.message);
+      // 不要退出进程，只记录错误
+    });
+
     this.wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
       const clientId = this.generateClientId();
       
@@ -118,26 +124,26 @@ export class GestureWebSocketService {
       });
 
       ws.on("error", (e) => {
-        console.error(`❌ WS error (${clientId}):`, e);
-        this.clients.delete(clientId);
+        console.error(`❌ WS error (${clientId}):`, e.message || e);
+        // ✅ 安全清理，不让错误传播导致进程退出
+        try {
+          this.clients.delete(clientId);
+        } catch (cleanupErr) {
+          console.error("Failed to cleanup client:", cleanupErr);
+        }
       });
-    });
-
-    this.wss.on("error", (e: any) => {
-      console.error("\n❌ WebSocketServer error:", e);
-      if (e.code === 'EADDRINUSE') {
-        console.error("⚠️  端口冲突：WebSocket 尝试监听已占用的端口！");
-        console.error("💡 提示：请检查是否有多个 WebSocketServer 实例被创建");
-      }
     });
   }
 
   // ====================== Python 子进程 ======================
 
   private setupPythonProcess() {
-    // 🟡 生产环境跳过 Python spawn（避免 opencv-python 等依赖导致崩溃）
-    if (process.env.NODE_ENV === "production") {
-      console.log("🟡 Skipping Python gesture service in production (Render deploy mode)");
+    // ✅ 环境开关：PY_WORKER_ENABLED（默认 false，避免生产环境依赖问题）
+    const pyEnabled = process.env.PY_WORKER_ENABLED === "true";
+    
+    if (!pyEnabled) {
+      console.log("⚠️  Python worker disabled (PY_WORKER_ENABLED=false)");
+      console.log("   手势识别将不可用，但服务器继续运行");
       this.pythonProcess = null;
       return; // ✅ 直接返回，不启动 Python，服务器继续运行
     }
@@ -194,6 +200,7 @@ export class GestureWebSocketService {
       this.pythonProcess.on("error", (err: Error) => {
         console.error(`❌ Python error: ${err.message}`);
         this.pythonProcess = null;
+        // ✅ 不要退出主进程，只是记录错误
       });
 
       console.log("✅ Python gesture service started");
@@ -202,6 +209,8 @@ export class GestureWebSocketService {
       console.error(
         `👉 Make sure dependencies are installed: pip install mediapipe opencv-python numpy joblib scikit-learn`
       );
+      // ✅ Python 启动失败不影响 HTTP/WebSocket 服务
+      this.pythonProcess = null;
     }
   }
 
