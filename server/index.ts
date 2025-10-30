@@ -7,6 +7,10 @@ import { GestureWebSocketService } from "./websocket_service";
 import cors from "cors";
 
 const app = express();
+
+// ✅ 健康检查端点（最前面，不依赖任何外部资源）
+app.get("/healthz", (_req, res) => res.status(200).send("ok"));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
