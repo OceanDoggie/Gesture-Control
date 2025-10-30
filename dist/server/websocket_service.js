@@ -9,15 +9,18 @@ import path from "path";
 import { WebSocketServer, WebSocket } from "ws";
 import { PythonShell } from "python-shell";
 const WS_PATH = "/ws/gesture"; // 前端用的 WS 路径
-const HEARTBEAT_MS = 30000; // 心跳间隔
+const HEARTBEAT_MS = 30_000; // 心跳间隔
 export class GestureWebSocketService {
+    // 仅一个 WSS 实例
+    wss;
+    httpServer;
+    clients = new Map();
+    pythonProcess = null;
+    heartBeatTimer = null;
     /**
      * 只附着到外部 server（由 index.ts 传入）
      */
     constructor(externalServer) {
-        this.clients = new Map();
-        this.pythonProcess = null;
-        this.heartBeatTimer = null;
         this.httpServer = externalServer;
         console.log("🔗 Attaching Gesture WebSocket to existing HTTP server...");
         // 打印当前 upgrade 监听数量，便于调试
@@ -44,6 +47,11 @@ export class GestureWebSocketService {
     }
     // ====================== WS 处理 ======================
     setupWebSocketHandlers() {
+        // ✅ 全局错误处理，防止未捕获错误导致进程崩溃
+        this.wss.on("error", (err) => {
+            console.error("❌ [WS Server Error]", err.message);
+            // 不要退出进程，只记录错误
+        });
         this.wss.on("connection", (ws, req) => {
             const clientId = this.generateClientId();
             // 打印连接详细信息，用于调试
@@ -82,20 +90,28 @@ export class GestureWebSocketService {
                 this.clients.delete(clientId);
             });
             ws.on("error", (e) => {
-                console.error(`❌ WS error (${clientId}):`, e);
-                this.clients.delete(clientId);
+                console.error(`❌ WS error (${clientId}):`, e.message || e);
+                // ✅ 安全清理，不让错误传播导致进程退出
+                try {
+                    this.clients.delete(clientId);
+                }
+                catch (cleanupErr) {
+                    console.error("Failed to cleanup client:", cleanupErr);
+                }
             });
-        });
-        this.wss.on("error", (e) => {
-            console.error("\n❌ WebSocketServer error:", e);
-            if (e.code === 'EADDRINUSE') {
-                console.error("⚠️  端口冲突：WebSocket 尝试监听已占用的端口！");
-                console.error("💡 提示：请检查是否有多个 WebSocketServer 实例被创建");
-            }
         });
     }
     // ====================== Python 子进程 ======================
     setupPythonProcess() {
+        // ✅ 环境开关：PY_WORKER_ENABLED（默认 false，避免生产环境依赖问题）
+        const pyEnabled = process.env.PY_WORKER_ENABLED === "true";
+        if (!pyEnabled) {
+            console.log("⚠️  Python worker disabled (PY_WORKER_ENABLED=false)");
+            console.log("   手势识别将不可用，但服务器继续运行");
+            this.pythonProcess = null;
+            return; // ✅ 直接返回，不启动 Python，服务器继续运行
+        }
+        // 🔵 开发环境：正常启动 Python 手势识别服务
         try {
             const scriptPath = path.join(process.cwd(), "server", "ml", "realtime_recognition.py");
             console.log(`🐍 Starting Python: ${scriptPath}`);
@@ -137,12 +153,15 @@ export class GestureWebSocketService {
             this.pythonProcess.on("error", (err) => {
                 console.error(`❌ Python error: ${err.message}`);
                 this.pythonProcess = null;
+                // ✅ 不要退出主进程，只是记录错误
             });
             console.log("✅ Python gesture service started");
         }
         catch (error) {
             console.error(`❌ Failed to start Python:`, error);
             console.error(`👉 Make sure dependencies are installed: pip install mediapipe opencv-python numpy joblib scikit-learn`);
+            // ✅ Python 启动失败不影响 HTTP/WebSocket 服务
+            this.pythonProcess = null;
         }
     }
     // ====================== 业务逻辑 ======================
@@ -289,3 +308,4 @@ export class GestureWebSocketService {
         console.log("🛑 WS service closed.");
     }
 }
+//# sourceMappingURL=websocket_service.js.map

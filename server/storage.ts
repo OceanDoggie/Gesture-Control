@@ -1,4 +1,4 @@
-import { type User, type InsertUser } from "../shared/schema";
+import { type User, type InsertUser } from "../shared/schema.js";
 import { randomUUID } from "crypto";
 
 // modify the interface with any CRUD methods
@@ -29,7 +29,12 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const user: User = { ...insertUser, id };
+    // 显式构造 User 对象，避免类型推断问题
+    const user: User = { 
+      id, 
+      username: insertUser.username, 
+      password: insertUser.password 
+    };
     this.users.set(id, user);
     return user;
   }

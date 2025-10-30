@@ -1,9 +1,9 @@
 import { PythonShell } from 'python-shell';
-import { log } from './vite';
+import { log } from './vite.js';
 // 手势识别API类
 class GestureAPI {
+    pythonProcess = null;
     constructor() {
-        this.pythonProcess = null;
         this.initializePythonService();
     }
     initializePythonService() {
@@ -197,3 +197,4 @@ export const processGesture = (req, res) => gestureAPI.processGesture(req, res);
 export const getGestureInstructions = (req, res) => gestureAPI.getGestureInstructions(req, res);
 export const getAllGestures = (req, res) => gestureAPI.getAllGestures(req, res);
 export const getServiceStatus = (req, res) => gestureAPI.getServiceStatus(req, res);
+//# sourceMappingURL=gesture_api.js.map

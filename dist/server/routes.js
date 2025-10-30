@@ -1,5 +1,5 @@
 import { createServer } from "http";
-import { processGesture, getGestureInstructions, getAllGestures, getServiceStatus } from "./gesture_api";
+import { processGesture, getGestureInstructions, getAllGestures, getServiceStatus } from "./gesture_api.js";
 export async function registerRoutes(app) {
     // 创建HTTP服务器
     const httpServer = createServer(app);
@@ -38,3 +38,4 @@ export async function registerRoutes(app) {
     process.on('SIGTERM', () => { });
     return httpServer;
 }
+//# sourceMappingURL=routes.js.map

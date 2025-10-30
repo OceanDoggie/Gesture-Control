@@ -1,11 +1,37 @@
 import express from "express";
-import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { registerRoutes } from "./routes.js";
+import { setupFrontend, log } from "./vite.js";
 // ✅ 新增：引入 WebSocket 服务
-import { GestureWebSocketService } from "./websocket_service";
+import { GestureWebSocketService } from "./websocket_service.js";
+// ✅ CORS：允许前端域名访问 API
+import cors from "cors";
 const app = express();
+// ✅ 健康检查端点（最前面，不依赖任何外部资源）
+app.get("/healthz", (_req, res) => res.status(200).send("ok"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+// ✅ CORS 配置：允许指定来源访问 API（支持环境变量配置）
+const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean).length > 0
+    ? process.env.ALLOWED_ORIGINS.split(",").map(s => s.trim())
+    : [
+        "https://gesture-control-xli6.onrender.com", // 生产环境前端
+        "http://localhost:5173" // 本地开发
+    ];
+app.use(cors({
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: false,
+}));
+// 处理预检请求（OPTIONS）
+app.options("*", cors({
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+}));
 // （中文说明）这段是 API 日志中间件，不动
 app.use((req, res, next) => {
     const start = Date.now();
@@ -39,14 +65,9 @@ app.use((req, res, next) => {
         res.status(status).json({ message });
         throw err;
     });
-    // （中文说明）开发环境用 Vite 代理，生产环境走静态资源
-    if (app.get("env") === "development") {
-        await setupVite(app, server);
-    }
-    else {
-        serveStatic(app);
-    }
-    // ✅ 关键：把 WebSocket 服务"挂载"到同一个 server 上（与 Express 复用 4000 端口）
+    // ✅ 统一的前端服务设置：生产环境走静态文件（dist），开发环境用 Vite 热更新
+    await setupFrontend(app, server);
+    // ✅ 关键：把 WebSocket 服务"挂载"到同一个 server 上（与 Express 复用端口）
     //    这行之前一直缺失，导致前端连不上 ws://localhost:4000/ws/gesture
     new GestureWebSocketService(server);
     // ✅ 监听 4000 (或 PORT)，并承载 API + 前端 + WebSocket
@@ -86,3 +107,4 @@ app.use((req, res, next) => {
         }
     });
 })();
+//# sourceMappingURL=index.js.map

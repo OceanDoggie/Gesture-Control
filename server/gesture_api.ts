@@ -3,7 +3,7 @@
  */
 import { Request, Response } from 'express';
 import { PythonShell } from 'python-shell';
-import { log } from './vite';
+import { log } from './vite.js';
 
 // 手势识别API类
 class GestureAPI {

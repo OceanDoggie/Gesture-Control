@@ -1,12 +1,12 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { storage } from "./storage.js";
 import { 
   processGesture, 
   getGestureInstructions, 
   getAllGestures, 
   getServiceStatus 
-} from "./gesture_api";
+} from "./gesture_api.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // 创建HTTP服务器

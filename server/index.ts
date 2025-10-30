@@ -1,8 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+import { registerRoutes } from "./routes.js";
 import { setupFrontend, log } from "./vite.js";
 // ✅ 新增：引入 WebSocket 服务
-import { GestureWebSocketService } from "./websocket_service";
+import { GestureWebSocketService } from "./websocket_service.js";
 // ✅ CORS：允许前端域名访问 API
 import cors from "cors";
 
