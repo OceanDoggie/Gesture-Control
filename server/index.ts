@@ -3,10 +3,43 @@ import { registerRoutes } from "./routes";
 import { setupFrontend, log } from "./vite.js";
 // ✅ 新增：引入 WebSocket 服务
 import { GestureWebSocketService } from "./websocket_service";
+// ✅ CORS：允许前端域名访问 API
+import cors from "cors";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// ✅ CORS 配置：允许指定来源访问 API（支持环境变量配置）
+const allowedOrigins =
+  (process.env.ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean).length > 0
+    ? (process.env.ALLOWED_ORIGINS as string).split(",").map(s => s.trim())
+    : [
+        "https://gesture-control-xli6.onrender.com",  // 生产环境前端
+        "http://localhost:5173"                        // 本地开发
+      ];
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: false,
+  })
+);
+
+// 处理预检请求（OPTIONS）
+app.options(
+  "*",
+  cors({
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
 // （中文说明）这段是 API 日志中间件，不动
 app.use((req, res, next) => {
