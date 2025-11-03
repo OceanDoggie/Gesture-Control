@@ -38,6 +38,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from './ui/select'; // Select 组件
+import { WS_URL } from '../config'; // WebSocket 统一配置
 
 interface GestureResult {
   gesture: string;
@@ -133,26 +134,10 @@ export default function WebcamViewer() {
 
   // 🔌 自动连接 WebSocket（组件挂载时立即连接，卸载时关闭）
   useEffect(() => {
-    // 使用环境变量 VITE_API_BASE，如果没有则使用默认逻辑
-    const apiBase = import.meta.env.VITE_API_BASE;
-    
-    let wsUrl: string;
-    if (apiBase) {
-      // 如果配置了 VITE_API_BASE（如 https://gesture-api.onrender.com）
-      const url = new URL(apiBase);
-      const wsProtocol = url.protocol === 'https:' ? 'wss' : 'ws';
-      wsUrl = `${wsProtocol}://${url.host}/ws/gesture`;
-    } else {
-      // 回退到默认逻辑：开发环境去 localhost:4000，生产环境用当前域名
-      const isDev = import.meta.env.DEV;
-      const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
-      const wsHost = isDev ? 'localhost:4000' : location.host;
-      wsUrl = `${wsProtocol}://${wsHost}/ws/gesture`;
-    }
+    // 使用统一的 WebSocket 配置（从 config.ts 导入）
+    console.log('[WS] Connecting to:', WS_URL);
 
-    console.log('[WS] Connecting to:', wsUrl);
-
-    const socket = new WebSocket(wsUrl);
+    const socket = new WebSocket(WS_URL);
 
     socket.onopen = () => {
       console.log('[WS] ✅ Connected to backend');

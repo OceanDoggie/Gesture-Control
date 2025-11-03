@@ -10,6 +10,12 @@ venv/
 ENV/
 
 # 构建输出
+/dist
+/dist/**
+/client/dist
+/client/dist/**
+/server/dist
+/server/dist/**
 client/dist/
 server/dist/
 build/
