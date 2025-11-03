@@ -80,16 +80,41 @@ export default function WebcamViewer() {
   
   // MediaPipe 启用状态（摄像头打开后启用）
   const [mpEnabled, setMpEnabled] = useState(false);
+  
+  // 任务 A：手势存在状态（基于 MediaPipe landmarks）
+  const [hasHand, setHasHand] = useState(false);
+  const noHandCounter = useRef(0); // 防抖计数器
+  const lastLandmarks = useRef<any>(null); // 保存最近一次 landmarks 用于绘制
 
   // 接入 MediaPipe Hands Hook
   const { ready: mpReady } = useMediaPipeHands({
     video: videoRef.current,
     enabled: mpEnabled,
     onResults: (lms) => {
-      // 日志输出 landmarks 数量（用于验证）
-      console.log('[MP] landmarks points:', lms?.[0]?.length);
+      // 任务 A：判断是否有手（landmarks 数组非空且至少 21 个点）
+      const present = Array.isArray(lms) && lms.length > 0 && lms[0]?.length >= 21;
       
-      // TODO: 这里可以将 landmarks 传给原有的 WS/评分流水线
+      if (present) {
+        // 检测到手，立即重置防抖计数器
+        noHandCounter.current = 0;
+        lastLandmarks.current = lms; // 保存 landmarks
+        
+        // 任务 C：首次检测到手时打印日志
+        if (!hasHand) {
+          console.info('[UI] hand detected');
+          setHasHand(true);
+        }
+      } else {
+        // 没检测到手，累计防抖计数
+        // 连续 8 帧都没手才置 false，避免闪烁
+        if (++noHandCounter.current > 8 && hasHand) {
+          console.info('[UI] no hand (debounced)');
+          setHasHand(false);
+          lastLandmarks.current = null;
+        }
+      }
+      
+      // 保留原有的 WS/评分逻辑（如果之前有的话）
       // 目前保持原有的帧发送逻辑不变
     },
   });
@@ -707,11 +732,13 @@ export default function WebcamViewer() {
               <WebcamOverlay
                 score={score}              // Live Score 显示即时分数
                 smoothScore={smoothScore}  // 进度条使用平滑分数
-                handsDetected={handsDetected}
+                handsDetected={hasHand}    // 任务 A：使用 MediaPipe 的手势存在状态
                 predicted={predicted}
                 landmarksOk={landmarksOk}
                 showDebug={showDebug}
                 fps={fpsCounterRef.current.fps}
+                landmarks={lastLandmarks.current}  // 任务 B：传入 landmarks 用于绘制
+                videoMirrored={videoMirrored}      // 传入镜像状态
               />
             )}
 
