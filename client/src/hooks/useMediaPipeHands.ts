@@ -14,15 +14,16 @@ import { useEffect, useRef, useState } from 'react';
 import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 
 interface MediaPipeHandsConfig {
-  onResults?: (results: any) => void;
-  enabled?: boolean;
+  video: HTMLVideoElement | null;      // 视频元素
+  enabled?: boolean;                    // 是否启用检测
+  onResults?: (landmarks: any) => void; // 结果回调
 }
 
 // MediaPipe Tasks Vision CDN 配置
 const MP_WASM_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.10/wasm';
 const HAND_TASK_CDN = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 
-export function useMediaPipeHands({ onResults, enabled = true }: MediaPipeHandsConfig) {
+export default function useMediaPipeHands({ video, enabled = true, onResults }: MediaPipeHandsConfig) {
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const handLandmarkerRef = useRef<HandLandmarker | null>(null);
@@ -92,41 +93,53 @@ export function useMediaPipeHands({ onResults, enabled = true }: MediaPipeHandsC
     };
   }, [enabled]);
 
-  /**
-   * 处理视频帧（兼容原 API）
-   * @param videoElement HTML Video 元素
-   */
-  const processFrame = async (videoElement: HTMLVideoElement) => {
-    if (!handLandmarkerRef.current || !isReady) {
+  // 自动帧循环：当 video、enabled 和 isReady 都满足时启动
+  useEffect(() => {
+    if (!video || !enabled || !isReady || !handLandmarkerRef.current) {
       return;
     }
 
-    try {
-      // 获取当前视频时间戳（毫秒）
-      const timestamp = Date.now();
+    let animationId: number;
+    let lastTimestamp = -1;
 
-      // 调用 HandLandmarker 检测
-      const results = handLandmarkerRef.current.detectForVideo(videoElement, timestamp);
+    // 帧处理函数
+    const detectFrame = () => {
+      if (!video || !handLandmarkerRef.current) return;
 
-      // 转换结果格式以兼容原有回调（模拟 @mediapipe/hands 的格式）
-      if (onResultsRef.current) {
-        onResultsRef.current({
-          image: videoElement,
-          multiHandLandmarks: results.landmarks,      // 21 个关键点
-          multiHandWorldLandmarks: results.worldLandmarks,
-          multiHandedness: results.handedness,        // 左/右手
-        });
+      try {
+        const now = Date.now();
+        
+        // 调用 HandLandmarker 检测（detectForVideo 需要单调递增的时间戳）
+        const results = handLandmarkerRef.current.detectForVideo(video, now);
+
+        // 提取 landmarks 并传给回调
+        if (onResultsRef.current && results.landmarks && results.landmarks.length > 0) {
+          onResultsRef.current(results.landmarks); // 传递 landmarks 数组
+        }
+
+        lastTimestamp = now;
+      } catch (err) {
+        console.error('[MP] Frame processing error:', err);
       }
-    } catch (err) {
-      console.error('[MP] Frame processing error:', err);
-    }
-  };
+
+      // 继续下一帧
+      animationId = requestAnimationFrame(detectFrame);
+    };
+
+    // 启动帧循环
+    detectFrame();
+
+    // 清理
+    return () => {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+    };
+  }, [video, enabled, isReady]);
 
   return {
-    isReady,
+    ready: isReady,  // 返回 ready 状态
     error,
-    processFrame,
-    handLandmarker: handLandmarkerRef.current,
   };
 }
 

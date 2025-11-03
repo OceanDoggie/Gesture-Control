@@ -39,6 +39,7 @@ import {
   SelectValue 
 } from './ui/select'; // Select 组件
 import { WS_URL } from '../config'; // WebSocket 统一配置
+import useMediaPipeHands from '@/hooks/useMediaPipeHands'; // MediaPipe Hands Hook
 
 interface GestureResult {
   gesture: string;
@@ -76,6 +77,22 @@ export default function WebcamViewer() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  
+  // MediaPipe 启用状态（摄像头打开后启用）
+  const [mpEnabled, setMpEnabled] = useState(false);
+
+  // 接入 MediaPipe Hands Hook
+  const { ready: mpReady } = useMediaPipeHands({
+    video: videoRef.current,
+    enabled: mpEnabled,
+    onResults: (lms) => {
+      // 日志输出 landmarks 数量（用于验证）
+      console.log('[MP] landmarks points:', lms?.[0]?.length);
+      
+      // TODO: 这里可以将 landmarks 传给原有的 WS/评分流水线
+      // 目前保持原有的帧发送逻辑不变
+    },
+  });
 
   // WebSocket connection status
   const [wsConnected, setWsConnected] = useState(false);
@@ -388,6 +405,12 @@ export default function WebcamViewer() {
         videoRef.current.srcObject = mediaStream;
         setStream(mediaStream);
         setIsStreaming(true);
+        
+        // 等待视频播放后启用 MediaPipe
+        await videoRef.current.play();
+        setMpEnabled(true);
+        
+        console.info('Camera started'); // 验收标准日志
         console.log('Camera started successfully (640x480@20-24fps)');
       }
     } catch (err) {
@@ -397,6 +420,9 @@ export default function WebcamViewer() {
   };
 
   const stopCamera = () => {
+    // 停止 MediaPipe
+    setMpEnabled(false);
+    
     if (stream) {
       stream.getTracks().forEach((t) => t.stop());
       setStream(null);
@@ -405,7 +431,8 @@ export default function WebcamViewer() {
 
     setIsStreaming(false);
     stopGestureRecognition();
-    console.log('Camera stopped');
+    
+    console.info('Camera stopped'); // 验收标准日志
   };
 
   // 发送帧循环（独立于渲染循环，使用 setInterval 限制发送速率）
@@ -437,7 +464,13 @@ export default function WebcamViewer() {
           <div className="flex items-center justify-between">
             {/* 标题 - 使用 i18n */}
             <h2 className="text-2xl font-semibold text-foreground">{lang.ui.title}</h2>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              {/* MediaPipe 状态显示 */}
+              {isStreaming && (
+                <Badge variant="outline" className="text-xs">
+                  {mpReady ? 'MP ready ✅' : 'MP init…'}
+                </Badge>
+              )}
               <Button
                 onClick={startCamera}
                 disabled={isStreaming}
