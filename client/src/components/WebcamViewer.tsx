@@ -104,6 +104,25 @@ export default function WebcamViewer() {
           console.info('[UI] hand detected');
           setHasHand(true);
         }
+
+        // 📤 发送 landmarks 到后端（携带镜像/单位上下文）
+        if (isRecognizing && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          const video = videoRef.current;
+          const videoWidth = video?.videoWidth || 640;
+          const videoHeight = video?.videoHeight || 480;
+          
+          wsRef.current.send(
+            JSON.stringify({
+              type: 'landmarks',
+              ts: Date.now(),
+              // 将 21 点转为 [x, y, z] 数组格式（tasks-vision 的 image 坐标，范围 0~1）
+              points: (lms[0] ?? []).map((p: any) => [p.x, p.y, p.z ?? 0]),
+              image: { width: videoWidth, height: videoHeight, unit: 'norm01' },
+              mirrored: videoMirrored,  // 镜像状态（CSS transform: scaleX(-1)）
+              target_gesture: targetGesture,  // 目标手势
+            }),
+          );
+        }
       } else {
         // 没检测到手，累计防抖计数
         // 连续 8 帧都没手才置 false，避免闪烁
@@ -113,9 +132,6 @@ export default function WebcamViewer() {
           lastLandmarks.current = null;
         }
       }
-      
-      // 保留原有的 WS/评分逻辑（如果之前有的话）
-      // 目前保持原有的帧发送逻辑不变
     },
   });
 
@@ -142,6 +158,7 @@ export default function WebcamViewer() {
     hits,
     landmarks,
     predicted,
+    confidence,   // 预测置信度 (0-1)
     landmarksOk,
     handsDetected,
     latencyMs,    // 网络延迟
@@ -235,6 +252,16 @@ export default function WebcamViewer() {
       // 打印 WS FPS（用于性能监控）
       if (showDebug) {
         console.log(`[WS FPS] ${wsCounter.fps} msg/s`);
+      }
+    }
+
+    // 任务 C：接收评分时打印日志（抽样打印，避免刷屏）
+    if (data?.ok && data.data?.type === 'gesture_result') {
+      // 每 30 帧打印一次
+      if (wsCounter.frames % 30 === 0) {
+        console.log(`[WS] score: ${data.data.confidence ? (data.data.confidence * 100).toFixed(0) : 0}%`, 
+                    `predicted: ${data.data.predicted || 'none'}`,
+                    `hands: ${data.data.hands_detected ? 'Y' : 'N'}`);
       }
     }
 
@@ -362,6 +389,9 @@ export default function WebcamViewer() {
       console.error('Failed to load gesture instructions:', err);
     }
 
+    // 任务 C：打印开始识别日志
+    console.log(`[WS] Starting recognition for gesture: ${gesture}`);
+    
     wsRef.current.send(
       JSON.stringify({
         type: 'start_recognition',
@@ -372,6 +402,9 @@ export default function WebcamViewer() {
 
   // Stop recognition
   const stopGestureRecognition = () => {
+    // 任务 C：打印停止识别日志
+    console.log(`[WS] Stopping recognition`);
+    
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'stop_recognition' }));
     }
@@ -381,6 +414,9 @@ export default function WebcamViewer() {
   };
 
   // ⚠️ 性能优化：发送帧前先缩放到 320x240（降低传输和推理成本）
+  // 任务 C：添加发送日志（限频打印）
+  const frameSendCounter = useRef({ count: 0, lastLog: Date.now() });
+  
   const processFrame = useCallback(() => {
     if (!isStreaming || !isRecognizing || !videoRef.current || !canvasRef.current) return;
 
@@ -403,6 +439,15 @@ export default function WebcamViewer() {
     const frameData = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      // 任务 C：每 60 帧（约 3 秒）打印一次发送日志
+      const counter = frameSendCounter.current;
+      counter.count++;
+      const now = Date.now();
+      if (counter.count % 60 === 0 || now - counter.lastLog > 3000) {
+        console.log(`[WS] sending frame (${TARGET_WIDTH}x${TARGET_HEIGHT}, ~${(frameData.length / 1024).toFixed(1)}KB)`);
+        counter.lastLog = now;
+      }
+
       wsRef.current.send(
         JSON.stringify({
           type: 'frame_data',
@@ -734,6 +779,7 @@ export default function WebcamViewer() {
                 smoothScore={smoothScore}  // 进度条使用平滑分数
                 handsDetected={hasHand}    // 任务 A：使用 MediaPipe 的手势存在状态
                 predicted={predicted}
+                confidence={confidence}    // 预测置信度 (0-1)
                 landmarksOk={landmarksOk}
                 showDebug={showDebug}
                 fps={fpsCounterRef.current.fps}

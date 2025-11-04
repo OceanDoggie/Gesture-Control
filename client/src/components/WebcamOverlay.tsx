@@ -18,6 +18,7 @@ interface WebcamOverlayProps {
   smoothScore?: number;      // EMA 平滑分数 (0-100)，用于进度条
   handsDetected?: boolean;   // 是否检测到手部
   predicted?: string | null; // 预测的手势
+  confidence?: number;       // 预测置信度 (0-1)
   landmarksOk?: boolean;     // 关键点质量是否良好
   showDebug?: boolean;       // 是否显示调试信息
   fps?: number;              // 渲染 FPS
@@ -30,6 +31,7 @@ export function WebcamOverlay({
   smoothScore,
   handsDetected = true,
   predicted,
+  confidence,
   landmarksOk = true,
   showDebug = false,
   fps = 0,
@@ -134,6 +136,22 @@ export function WebcamOverlay({
           <div className={`text-white px-3 py-1.5 rounded-lg shadow-lg font-medium ${colorClass}`}>
             {lang.stats.liveScore}: {score}
           </div>
+          
+          {/* 预测结果卡片（显示 predicted 和 confidence） */}
+          {predicted && confidence !== undefined && (
+            <div className="bg-black/75 text-white px-3 py-2 rounded-lg shadow-lg text-sm backdrop-blur-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-gray-300">预测:</span>
+                <span className="font-bold text-lg text-cyan-400">{predicted}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3 mt-1">
+                <span className="text-gray-300">信心:</span>
+                <span className={`font-medium ${confidence >= 0.7 ? 'text-green-400' : 'text-yellow-400'}`}>
+                  {Math.round(confidence * 100)}%
+                </span>
+              </div>
+            </div>
+          )}
           
           {/* 调试信息（可选，按 D 键切换） */}
           {showDebug && (

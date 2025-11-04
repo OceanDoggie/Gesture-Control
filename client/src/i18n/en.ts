@@ -22,6 +22,20 @@ export const en = {
     clickToStart: 'Click "Start Camera" to begin',
     target: (gesture: string) => `Target: ${gesture}`,
     live: "LIVE",
+    
+    // 拼写指导 UI
+    spellingCoach: "Spelling Coach",
+    selectLetter: "Select a letter (A-Z)",
+    enterWord: "Enter a word to fingerspell",
+    wordPlaceholder: "e.g., MONDAY",
+    mode: "Mode",
+    freeMode: "Free Practice",
+    autoMode: "Auto Spell",
+    currentLetter: "Current",
+    nextLetter: "Next",
+    stability: "Stability",
+    wordComplete: "Word Complete!",
+    letterComplete: (letter: string) => `Letter "${letter}" completed!`,
   },
 
   // 状态相关文案
@@ -114,6 +128,8 @@ export const en = {
     selectGestureFirst: "Please select a gesture first.",
     connectingToAI: "Connecting to AI service, please wait...",
     wsWaitFailed: "WebSocket connection failed. Please make sure the backend is running.",
+    enterWordFirst: "Please enter a word first (e.g., MONDAY).",
+    invalidWord: "Please enter a valid word (only letters A-Z).",
   },
 } as const;
 

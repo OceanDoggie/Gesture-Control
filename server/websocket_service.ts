@@ -16,10 +16,15 @@ const WS_PATH = "/ws/gesture";        // 前端用的 WS 路径
 const HEARTBEAT_MS = 30_000;          // 心跳间隔
 
 interface GestureMessage {
-  type: "gesture_data" | "frame_data" | "start_recognition" | "stop_recognition";
+  type: "gesture_data" | "frame_data" | "landmarks" | "start_recognition" | "stop_recognition";
   data?: any;
   frame?: string;
   target_gesture?: string;
+  // landmarks 消息字段
+  points?: number[][];  // 21 个 [x, y, z] 点
+  image?: { width: number; height: number; unit: string };
+  mirrored?: boolean;
+  ts?: number;
 }
 
 interface ClientConnection {
@@ -246,6 +251,13 @@ export class GestureWebSocketService {
         }
         break;
       }
+      case "landmarks": {
+        // 处理前端发来的 landmarks 数据（携带镜像/单位上下文）
+        if (client.isRecognizing && message.points && this.pythonProcess) {
+          this.processLandmarks(clientId, message);
+        }
+        break;
+      }
       default:
         this.sendToClient(clientId, { type: "error", message: "Unknown message type" });
     }
@@ -281,6 +293,29 @@ export class GestureWebSocketService {
     } catch (e) {
       console.error("❌ send to Python failed:", e);
       this.sendToClient(clientId, { type: "error", message: "Send to Python failed" });
+    }
+  }
+
+  // 处理 landmarks 消息（带镜像/单位上下文）
+  private processLandmarks(clientId: string, message: GestureMessage) {
+    const client = this.clients.get(clientId);
+    if (!client || !this.pythonProcess) return;
+
+    const payload = {
+      type: "process_landmarks",  // 新的处理类型
+      client_id: clientId,
+      points: message.points,
+      image: message.image,
+      mirrored: message.mirrored,
+      target_gesture: message.target_gesture || client.targetGesture || "",
+      ts: message.ts || Date.now(),
+    };
+
+    try {
+      this.pythonProcess.send(JSON.stringify(payload));
+    } catch (e) {
+      console.error("❌ send landmarks to Python failed:", e);
+      this.sendToClient(clientId, { type: "error", message: "Send landmarks failed" });
     }
   }
 

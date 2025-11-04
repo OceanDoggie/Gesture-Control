@@ -49,3 +49,13 @@ coverage/
 # 但是要保留这些重要文件（不要忽略）
 !server/ml/asl_knn_model.pkl
 !server/ml/asl_dataset.csv
+/client/dist
+/dist
+/server/dist
+/dist/**
+/client/dist/**
+/client/dist
+/dist
+/server/dist
+/dist/**
+/client/dist/**
