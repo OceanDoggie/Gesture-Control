@@ -38,6 +38,8 @@ import {
   SelectTrigger, 
   SelectValue 
 } from './ui/select'; // Select 组件
+import { WS_URL } from '../config'; // WebSocket 统一配置
+import useMediaPipeHands from '@/hooks/useMediaPipeHands'; // MediaPipe Hands Hook
 
 interface GestureResult {
   gesture: string;
@@ -75,6 +77,63 @@ export default function WebcamViewer() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  
+  // MediaPipe 启用状态（摄像头打开后启用）
+  const [mpEnabled, setMpEnabled] = useState(false);
+  
+  // 任务 A：手势存在状态（基于 MediaPipe landmarks）
+  const [hasHand, setHasHand] = useState(false);
+  const noHandCounter = useRef(0); // 防抖计数器
+  const lastLandmarks = useRef<any>(null); // 保存最近一次 landmarks 用于绘制
+
+  // 接入 MediaPipe Hands Hook
+  const { ready: mpReady } = useMediaPipeHands({
+    video: videoRef.current,
+    enabled: mpEnabled,
+    onResults: (lms) => {
+      // 任务 A：判断是否有手（landmarks 数组非空且至少 21 个点）
+      const present = Array.isArray(lms) && lms.length > 0 && lms[0]?.length >= 21;
+      
+      if (present) {
+        // 检测到手，立即重置防抖计数器
+        noHandCounter.current = 0;
+        lastLandmarks.current = lms; // 保存 landmarks
+        
+        // 任务 C：首次检测到手时打印日志
+        if (!hasHand) {
+          console.info('[UI] hand detected');
+          setHasHand(true);
+        }
+
+        // 📤 发送 landmarks 到后端（携带镜像/单位上下文）
+        if (isRecognizing && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          const video = videoRef.current;
+          const videoWidth = video?.videoWidth || 640;
+          const videoHeight = video?.videoHeight || 480;
+          
+          wsRef.current.send(
+            JSON.stringify({
+              type: 'landmarks',
+              ts: Date.now(),
+              // 将 21 点转为 [x, y, z] 数组格式（tasks-vision 的 image 坐标，范围 0~1）
+              points: (lms[0] ?? []).map((p: any) => [p.x, p.y, p.z ?? 0]),
+              image: { width: videoWidth, height: videoHeight, unit: 'norm01' },
+              mirrored: videoMirrored,  // 镜像状态（CSS transform: scaleX(-1)）
+              target_gesture: targetGesture,  // 目标手势
+            }),
+          );
+        }
+      } else {
+        // 没检测到手，累计防抖计数
+        // 连续 8 帧都没手才置 false，避免闪烁
+        if (++noHandCounter.current > 8 && hasHand) {
+          console.info('[UI] no hand (debounced)');
+          setHasHand(false);
+          lastLandmarks.current = null;
+        }
+      }
+    },
+  });
 
   // WebSocket connection status
   const [wsConnected, setWsConnected] = useState(false);
@@ -99,6 +158,7 @@ export default function WebcamViewer() {
     hits,
     landmarks,
     predicted,
+    confidence,   // 预测置信度 (0-1)
     landmarksOk,
     handsDetected,
     latencyMs,    // 网络延迟
@@ -133,26 +193,10 @@ export default function WebcamViewer() {
 
   // 🔌 自动连接 WebSocket（组件挂载时立即连接，卸载时关闭）
   useEffect(() => {
-    // 使用环境变量 VITE_API_BASE，如果没有则使用默认逻辑
-    const apiBase = import.meta.env.VITE_API_BASE;
-    
-    let wsUrl: string;
-    if (apiBase) {
-      // 如果配置了 VITE_API_BASE（如 https://gesture-api.onrender.com）
-      const url = new URL(apiBase);
-      const wsProtocol = url.protocol === 'https:' ? 'wss' : 'ws';
-      wsUrl = `${wsProtocol}://${url.host}/ws/gesture`;
-    } else {
-      // 回退到默认逻辑：开发环境去 localhost:4000，生产环境用当前域名
-      const isDev = import.meta.env.DEV;
-      const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
-      const wsHost = isDev ? 'localhost:4000' : location.host;
-      wsUrl = `${wsProtocol}://${wsHost}/ws/gesture`;
-    }
+    // 使用统一的 WebSocket 配置（从 config.ts 导入）
+    console.log('[WS] Connecting to:', WS_URL);
 
-    console.log('[WS] Connecting to:', wsUrl);
-
-    const socket = new WebSocket(wsUrl);
+    const socket = new WebSocket(WS_URL);
 
     socket.onopen = () => {
       console.log('[WS] ✅ Connected to backend');
@@ -208,6 +252,16 @@ export default function WebcamViewer() {
       // 打印 WS FPS（用于性能监控）
       if (showDebug) {
         console.log(`[WS FPS] ${wsCounter.fps} msg/s`);
+      }
+    }
+
+    // 任务 C：接收评分时打印日志（抽样打印，避免刷屏）
+    if (data?.ok && data.data?.type === 'gesture_result') {
+      // 每 30 帧打印一次
+      if (wsCounter.frames % 30 === 0) {
+        console.log(`[WS] score: ${data.data.confidence ? (data.data.confidence * 100).toFixed(0) : 0}%`, 
+                    `predicted: ${data.data.predicted || 'none'}`,
+                    `hands: ${data.data.hands_detected ? 'Y' : 'N'}`);
       }
     }
 
@@ -335,6 +389,9 @@ export default function WebcamViewer() {
       console.error('Failed to load gesture instructions:', err);
     }
 
+    // 任务 C：打印开始识别日志
+    console.log(`[WS] Starting recognition for gesture: ${gesture}`);
+    
     wsRef.current.send(
       JSON.stringify({
         type: 'start_recognition',
@@ -345,6 +402,9 @@ export default function WebcamViewer() {
 
   // Stop recognition
   const stopGestureRecognition = () => {
+    // 任务 C：打印停止识别日志
+    console.log(`[WS] Stopping recognition`);
+    
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'stop_recognition' }));
     }
@@ -354,6 +414,9 @@ export default function WebcamViewer() {
   };
 
   // ⚠️ 性能优化：发送帧前先缩放到 320x240（降低传输和推理成本）
+  // 任务 C：添加发送日志（限频打印）
+  const frameSendCounter = useRef({ count: 0, lastLog: Date.now() });
+  
   const processFrame = useCallback(() => {
     if (!isStreaming || !isRecognizing || !videoRef.current || !canvasRef.current) return;
 
@@ -376,6 +439,15 @@ export default function WebcamViewer() {
     const frameData = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      // 任务 C：每 60 帧（约 3 秒）打印一次发送日志
+      const counter = frameSendCounter.current;
+      counter.count++;
+      const now = Date.now();
+      if (counter.count % 60 === 0 || now - counter.lastLog > 3000) {
+        console.log(`[WS] sending frame (${TARGET_WIDTH}x${TARGET_HEIGHT}, ~${(frameData.length / 1024).toFixed(1)}KB)`);
+        counter.lastLog = now;
+      }
+
       wsRef.current.send(
         JSON.stringify({
           type: 'frame_data',
@@ -403,6 +475,12 @@ export default function WebcamViewer() {
         videoRef.current.srcObject = mediaStream;
         setStream(mediaStream);
         setIsStreaming(true);
+        
+        // 等待视频播放后启用 MediaPipe
+        await videoRef.current.play();
+        setMpEnabled(true);
+        
+        console.info('Camera started'); // 验收标准日志
         console.log('Camera started successfully (640x480@20-24fps)');
       }
     } catch (err) {
@@ -412,6 +490,9 @@ export default function WebcamViewer() {
   };
 
   const stopCamera = () => {
+    // 停止 MediaPipe
+    setMpEnabled(false);
+    
     if (stream) {
       stream.getTracks().forEach((t) => t.stop());
       setStream(null);
@@ -420,7 +501,8 @@ export default function WebcamViewer() {
 
     setIsStreaming(false);
     stopGestureRecognition();
-    console.log('Camera stopped');
+    
+    console.info('Camera stopped'); // 验收标准日志
   };
 
   // 发送帧循环（独立于渲染循环，使用 setInterval 限制发送速率）
@@ -452,7 +534,13 @@ export default function WebcamViewer() {
           <div className="flex items-center justify-between">
             {/* 标题 - 使用 i18n */}
             <h2 className="text-2xl font-semibold text-foreground">{lang.ui.title}</h2>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              {/* MediaPipe 状态显示 */}
+              {isStreaming && (
+                <Badge variant="outline" className="text-xs">
+                  {mpReady ? 'MP ready ✅' : 'MP init…'}
+                </Badge>
+              )}
               <Button
                 onClick={startCamera}
                 disabled={isStreaming}
@@ -689,11 +777,14 @@ export default function WebcamViewer() {
               <WebcamOverlay
                 score={score}              // Live Score 显示即时分数
                 smoothScore={smoothScore}  // 进度条使用平滑分数
-                handsDetected={handsDetected}
+                handsDetected={hasHand}    // 任务 A：使用 MediaPipe 的手势存在状态
                 predicted={predicted}
+                confidence={confidence}    // 预测置信度 (0-1)
                 landmarksOk={landmarksOk}
                 showDebug={showDebug}
                 fps={fpsCounterRef.current.fps}
+                landmarks={lastLandmarks.current}  // 任务 B：传入 landmarks 用于绘制
+                videoMirrored={videoMirrored}      // 传入镜像状态
               />
             )}
 

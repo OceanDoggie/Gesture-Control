@@ -43,6 +43,7 @@ export function useGestureScore() {
   // 新增状态：详细信息
   const [landmarks, setLandmarks] = useState<Landmark[]>([]);
   const [predicted, setPredicted] = useState<string | null>(null);
+  const [confidence, setConfidence] = useState<number>(0);  // 预测置信度 (0-1)
   const [landmarksOk, setLandmarksOk] = useState(false);
   const [handsDetected, setHandsDetected] = useState(false);
   
@@ -91,6 +92,11 @@ export function useGestureScore() {
     setPredicted(predictedGesture || null);
     setLandmarksOk(!!landmarks_ok);
     setLandmarks(landmarksData || []);
+    
+    // 计算并保存 confidence
+    const rawConf = Number(confidence) || 0;
+    const normalizedConf = Math.max(0, Math.min(1, rawConf)); // 限制在 0-1
+    setConfidence(normalizedConf);
 
     // 无手帧不计入统计
     if (!hands_detected) {
@@ -100,8 +106,6 @@ export function useGestureScore() {
     }
 
     // 计算当前帧分数 (0-100)
-    const rawConf = Number(confidence) || 0;
-    const normalizedConf = Math.max(0, Math.min(1, rawConf)); // 限制在 0-1
     const currentScore = Math.round(normalizedConf * 100);
     setScore(currentScore);
 
@@ -130,6 +134,7 @@ export function useGestureScore() {
     setHits(0);
     setLandmarks([]);
     setPredicted(null);
+    setConfidence(0);
     setLandmarksOk(false);
     setHandsDetected(false);
     setLatencyMs(0);
@@ -147,6 +152,7 @@ export function useGestureScore() {
     hits,          // 正确帧数
     landmarks,     // 手部关键点数据
     predicted,     // 预测的手势
+    confidence,    // 预测置信度 (0-1)
     landmarksOk,   // 关键点质量是否良好
     handsDetected, // 是否检测到手部
     latencyMs,     // 网络延迟（毫秒）
