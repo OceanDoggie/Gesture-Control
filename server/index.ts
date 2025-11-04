@@ -100,6 +100,9 @@ app.use((req, res, next) => {
       console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       console.log(`🚀 HTTP server running on http://0.0.0.0:${port}`);
       console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+      // 打印 Python 相关环境变量，便于 Render 日志确认
+      console.log(`🐍 Python Worker: ${process.env.PY_WORKER_ENABLED || 'false'}`);
+      console.log(`🐍 Python Binary: ${process.env.PYTHON_BIN || 'python'}`);
       console.log(`\n📡 WebSocket Endpoints:`);
       console.log(`   • Gesture Recognition: ws://localhost:${port}/ws/gesture`);
       if (process.env.NODE_ENV === 'development') {
